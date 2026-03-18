@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+.env
+.wrangler/
+wrangler.toml
+.DS_Store
+.idea/
+.vscode/
+*.log
+*.cache
+*.tmp
+*.bak
+*.swp
+*.swo
+*.swn

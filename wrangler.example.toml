@@ -1,0 +1,9 @@
+name = "sub-convert-worker"
+main = "src/index.js"
+compatibility_date = "2026-03-18"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "SUB_LINKS"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+preview_id = "REPLACE_WITH_YOUR_KV_PREVIEW_ID"

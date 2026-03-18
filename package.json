@@ -1,0 +1,14 @@
+{
+  "name": "sub-convert-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy-page": "wrangler pages deploy pages --project-name sub-convert-ui"
+  },
+  "devDependencies": {
+    "wrangler": "^4.8.0"
+  }
+}
