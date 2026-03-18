@@ -110,8 +110,6 @@ npx wrangler pages dev pages
 - `format=profile|provider`
   - `profile`（默认）：完整 Clash.Meta 配置
   - `provider`：仅输出 `proxies:`（给 `proxy-providers`）
-- `udp443cnPolicy=<策略组名>`（仅 `profile` 生效，默认 `DIRECT`）
-  - 对应规则：`AND,((DST-PORT,443),(NETWORK,UDP),(GEOIP,CN)),<策略>`
 
 POST JSON 示例：
 

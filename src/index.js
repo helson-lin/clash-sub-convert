@@ -95,8 +95,7 @@ export default {
     try {
       const input = await resolveInput(request, url);
       const format = (url.searchParams.get("format") || "profile").toLowerCase();
-      const udp443cnPolicy = normalizePolicy(url.searchParams.get("udp443cnPolicy"), "DIRECT");
-      const parsed = buildClashConfig(input, format, { udp443cnPolicy });
+      const parsed = buildClashConfig(input, format);
 
       if (parsed.proxies.length === 0) {
         return textResponse(
@@ -234,7 +233,7 @@ async function resolveInput(request, url) {
   };
 }
 
-function buildClashConfig(input, format = "profile", options = {}) {
+function buildClashConfig(input, format = "profile") {
   const proxies = [];
   const errors = [...input.errors];
 
@@ -279,7 +278,7 @@ function buildClashConfig(input, format = "profile", options = {}) {
 
   dedupeProxyNames(proxies);
 
-  const profileConfig = buildProfileConfig(proxies, options);
+  const profileConfig = buildProfileConfig(proxies);
   const providerConfig = { proxies };
 
   const config =
@@ -288,143 +287,284 @@ function buildClashConfig(input, format = "profile", options = {}) {
   return { proxies, errors, config };
 }
 
-function buildProfileConfig(proxies, options = {}) {
+function buildProfileConfig(proxies) {
   const proxyNames = proxies.map((p) => p.name);
   const all = proxyNames.length ? proxyNames : ["DIRECT"];
 
-  const base = {
+  return {
     "mixed-port": 7890,
-    "allow-lan": false,
-    "tcp-concurrent": true,
-    mode: "rule",
+    "tcp-concurrent": false,
+    "allow-lan": true,
+    ipv6: true,
+    mode: "Rule",
     "log-level": "info",
-    "unified-delay": true,
     "global-client-fingerprint": "chrome",
+    "find-process-mode": "strict",
+    "external-controller": "0.0.0.0:9090",
+    "geodata-mode": true,
+    "geo-auto-update": true,
+    "geo-update-interval": 3,
+    "geox-url": {
+      geoip: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
+      geosite: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
+      mmdb: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb",
+      asn: "https://mirror.ghproxy.com/https://github.com/xishang0128/geoip/releases/download/latest/GeoLite2-ASN.mmdb",
+    },
+    profile: {
+      "store-selected": true,
+      "store-fake-ip": true,
+    },
+    sniffer: {
+      enable: true,
+      "parse-pure-ip": true,
+      sniff: {
+        HTTP: {
+          ports: [80, "8080-8800"],
+          "override-destination": true,
+        },
+        TLS: {
+          ports: [443, 8443],
+        },
+        QUIC: {
+          ports: [443, 8443],
+        },
+      },
+      "skip-domain": ["Mijia Cloud", "dlg.io.mi.com", "+.apple.com"],
+    },
+    tun: {
+      enable: false,
+      stack: "mixed",
+      "dns-hijack": ["any:53"],
+      "auto-route": true,
+      "auto-detect-interface": true,
+    },
     dns: {
       enable: true,
       ipv6: true,
+      "prefer-h3": true,
+      listen: "0.0.0.0:53",
       "enhanced-mode": "fake-ip",
       "fake-ip-range": "198.18.0.1/16",
-      nameserver: ["https://1.1.1.1/dns-query", "https://8.8.8.8/dns-query"],
-      fallback: ["https://1.0.0.1/dns-query", "tls://8.8.4.4:853"],
+      "fake-ip-filter": [
+        "*.lan",
+        "cable.auth.com",
+        "+.msftconnecttest.com",
+        "+.msftncsi.com",
+        "network-test.debian.org",
+        "detectportal.firefox.com",
+        "resolver1.opendns.com",
+        "+.srv.nintendo.net",
+        "+.stun.playstation.net",
+        "xbox.*.microsoft.com",
+        "+.xboxlive.com",
+        "stun.*",
+        "global.turn.twilio.com",
+        "global.stun.twilio.com",
+        "localhost.*.qq.com",
+        "+.logon.battlenet.com.cn",
+        "+.logon.battle.net",
+        "+.blzstatic.cn",
+        "+.cmpassport.com",
+        "id6.me",
+        "open.e.189.cn",
+        "mdn.open.wo.cn",
+        "opencloud.wostore.cn",
+        "auth.wosms.cn",
+        "+.jegotrip.com.cn",
+        "+.icitymobile.mobi",
+        "+.pingan.com.cn",
+        "+.cmbchina.com",
+        "+.cmbchina.com.cn",
+        "pool.ntp.org",
+        "+.pool.ntp.org",
+        "ntp.*.com",
+        "time.*.com",
+        "ntp?.*.com",
+        "time?.*.com",
+        "time.*.gov",
+        "time.*.edu.cn",
+        "+.ntp.org.cn",
+        "time.*.apple.com",
+      ],
+      "default-nameserver": ["223.5.5.5", "119.29.29.29"],
+      "nameserver-policy": {
+        "www.baidu.com": "114.114.114.114",
+        "+.internal.crop.com": "10.0.0.1",
+        "www.baidu.com,+.google.cn": "https://doh.pub/dns-query",
+        "geosite:private,apple": "https://dns.alidns.com/dns-query",
+        "rule-set:google": "8.8.8.8",
+      },
+      nameserver: ["https://doh.pub/dns-query", "https://dns.alidns.com/dns-query"],
+      fallback: [
+        "https://1.1.1.2/dns-query",
+        "https://1.0.0.2/dns-query",
+        "https://208.67.222.222/dns-query",
+        "https://208.67.220.220/dns-query",
+        "https://9.9.9.9/dns-query",
+      ],
+      "fallback-filter": {
+        geoip: true,
+        "geoip-code": "CN",
+        geosite: ["gfw"],
+        ipcidr: ["240.0.0.0/4", "0.0.0.0/32"],
+        domain: [
+          "+.google.com",
+          "+.github.com",
+          "+.facebook.com",
+          "+.twitter.com",
+          "+.youtube.com",
+          "+.google.cn",
+          "+.googleapis.cn",
+          "+.googleapis.com",
+        ],
+      },
     },
     proxies,
-    "rule-providers": makeFixedRuleProviders(),
-  };
-
-  return {
-    ...base,
-    "proxy-groups": makeFixedProxyGroups(all),
-    rules: makeFixedRules(options.udp443cnPolicy),
-  };
-}
-
-function makeFixedProxyGroups(all) {
-  const serviceGroups = unique(
-    FIXED_RULE_SPECS.map((item) => item.group).filter(
-      (name) => name && name !== "DIRECT" && name !== "REJECT" && name !== "PROXY",
-    ),
-  ).map((name) => ({
-    name,
-    type: "select",
-    proxies: [MAIN_GROUP.proxy, MAIN_GROUP.auto, "DIRECT", ...all],
-  }));
-
-  return [
-    {
-      name: MAIN_GROUP.proxy,
-      type: "select",
-      proxies: [MAIN_GROUP.auto, "DIRECT", ...all],
+    "proxy-groups": [
+      {
+        name: "PROXY",
+        type: "select",
+        proxies: ["LOAD-BALANCE", "SELECT", "FALLBACK", "DIRECT"],
+      },
+      {
+        name: "SELECT",
+        type: "select",
+        proxies: all,
+      },
+      {
+        name: "LOAD-BALANCE",
+        type: "load-balance",
+        url: "https://cp.cloudflare.com/generate_204",
+        interval: 3600,
+        strategy: "consistent-hashing",
+        proxies: all,
+      },
+      {
+        name: "FALLBACK",
+        type: "fallback",
+        url: "https://cp.cloudflare.com/generate_204",
+        interval: 3600,
+        proxies: all,
+      },
+      {
+        name: "FINAL",
+        type: "select",
+        proxies: ["PROXY", "DIRECT"],
+      },
+    ],
+    "rule-providers": {
+      reject: {
+        type: "http",
+        behavior: "domain",
+        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/reject.txt",
+        path: "./ruleset/reject.yaml",
+        interval: 86400,
+      },
+      icloud: {
+        type: "http",
+        behavior: "domain",
+        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/icloud.txt",
+        path: "./ruleset/icloud.yaml",
+        interval: 86400,
+      },
+      apple: {
+        type: "http",
+        behavior: "domain",
+        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/apple.txt",
+        path: "./ruleset/apple.yaml",
+        interval: 86400,
+      },
+      google: {
+        type: "http",
+        behavior: "domain",
+        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/google.txt",
+        path: "./ruleset/google.yaml",
+        interval: 86400,
+      },
+      proxy: {
+        type: "http",
+        behavior: "domain",
+        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/proxy.txt",
+        path: "./ruleset/proxy.yaml",
+        interval: 86400,
+      },
+      direct: {
+        type: "http",
+        behavior: "domain",
+        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/direct.txt",
+        path: "./ruleset/direct.yaml",
+        interval: 86400,
+      },
+      private: {
+        type: "http",
+        behavior: "domain",
+        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/private.txt",
+        path: "./ruleset/private.yaml",
+        interval: 86400,
+      },
+      gfw: {
+        type: "http",
+        behavior: "domain",
+        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/gfw.txt",
+        path: "./ruleset/gfw.yaml",
+        interval: 86400,
+      },
+      "tld-not-cn": {
+        type: "http",
+        behavior: "domain",
+        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/tld-not-cn.txt",
+        path: "./ruleset/tld-not-cn.yaml",
+        interval: 86400,
+      },
+      telegramcidr: {
+        type: "http",
+        behavior: "ipcidr",
+        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/telegramcidr.txt",
+        path: "./ruleset/telegramcidr.yaml",
+        interval: 86400,
+      },
+      cncidr: {
+        type: "http",
+        behavior: "ipcidr",
+        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/cncidr.txt",
+        path: "./ruleset/cncidr.yaml",
+        interval: 86400,
+      },
+      lancidr: {
+        type: "http",
+        behavior: "ipcidr",
+        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/lancidr.txt",
+        path: "./ruleset/lancidr.yaml",
+        interval: 86400,
+      },
+      applications: {
+        type: "http",
+        behavior: "classical",
+        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/applications.txt",
+        path: "./ruleset/applications.yaml",
+        interval: 86400,
+      },
     },
-    {
-      name: MAIN_GROUP.auto,
-      type: "url-test",
-      url: "http://www.gstatic.com/generate_204",
-      interval: 300,
-      tolerance: 50,
-      proxies: all,
-    },
-    ...serviceGroups,
-  ];
+    rules: [
+      "RULE-SET,reject,REJECT",
+      "RULE-SET,apple,DIRECT",
+      "RULE-SET,applications,DIRECT",
+      "RULE-SET,cncidr,DIRECT",
+      "RULE-SET,direct,DIRECT",
+      "RULE-SET,icloud,DIRECT",
+      "RULE-SET,lancidr,DIRECT",
+      "RULE-SET,private,DIRECT",
+      "RULE-SET,proxy,PROXY",
+      "RULE-SET,gfw,PROXY",
+      "RULE-SET,google,PROXY",
+      "RULE-SET,telegramcidr,PROXY",
+      "RULE-SET,tld-not-cn,PROXY",
+      "GEOIP,LAN,DIRECT",
+      "GEOIP,CN,DIRECT",
+      "MATCH,FINAL",
+    ],
+  };
 }
-
-function makeFixedRuleProviders() {
-  const providers = {};
-  for (const spec of FIXED_RULE_SPECS) {
-    providers[spec.name] = {
-      type: "http",
-      behavior: "classical",
-      format: "text",
-      path: `./ruleset/${spec.name}.list`,
-      url: spec.url,
-      interval: 86400,
-    };
-  }
-  return providers;
-}
-
-function makeFixedRules(udp443cnPolicy = "DIRECT") {
-  const rules = FIXED_RULE_SPECS.map(
-    (spec) => `RULE-SET,${spec.name},${mapGroupName(spec.group)}`,
-  );
-  rules.unshift(`AND,((DST-PORT,443),(NETWORK,UDP),(GEOIP,CN)),${udp443cnPolicy}`);
-  rules.splice(4, 0, "DOMAIN-SUFFIX,litix.io,MAX");
-  rules.splice(5, 0, "DOMAIN-SUFFIX,discomax.com,MAX");
-  rules.splice(6, 0, "DOMAIN-SUFFIX,brightline.tv,MAX");
-  rules.push(`MATCH,${MAIN_GROUP.proxy}`);
-  return rules;
-}
-
-function mapGroupName(name) {
-  if (name === "PROXY") return MAIN_GROUP.proxy;
-  return name;
-}
-
-const MAIN_GROUP = {
-  proxy: "节点选择",
-  auto: "自动测速",
-};
-
-function normalizePolicy(raw, fallback) {
-  const v = String(raw || "").trim();
-  return v || fallback;
-}
-
-const FIXED_RULE_SPECS = [
-  { name: "ai", url: "https://raw.githubusercontent.com/iab0x00/ProxyRules/main/Rule/AI.txt", group: "AI" },
-  { name: "youtube", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/YouTube/YouTube.list", group: "YOUTUBE" },
-  { name: "netflix", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Netflix/Netflix.list", group: "NETFLIX" },
-  { name: "disney", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Disney/Disney.list", group: "DISNEY+" },
-  { name: "hbo", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/HBO/HBO.list", group: "MAX" },
-  { name: "spotify", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Spotify/Spotify.list", group: "SPOTIFY" },
-  { name: "telegram", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Telegram/Telegram.list", group: "TELEGRAM" },
-  { name: "paypal", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/PayPal/PayPal.list", group: "PAYPAL" },
-  { name: "twitter", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Twitter/Twitter.list", group: "TWITTER" },
-  { name: "facebook", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Facebook/Facebook.list", group: "FACEBOOK" },
-  { name: "amazon", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Amazon/Amazon.list", group: "AMAZON" },
-  { name: "sony", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Sony/Sony.list", group: "游戏平台" },
-  { name: "nintendo", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Nintendo/Nintendo.list", group: "游戏平台" },
-  { name: "epic", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Epic/Epic.list", group: "游戏平台" },
-  { name: "steamcn", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/SteamCN/SteamCN.list", group: "游戏平台" },
-  { name: "steam", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Steam/Steam.list", group: "游戏平台" },
-  { name: "game", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Game/Game.list", group: "游戏平台" },
-  { name: "github", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/GitHub/GitHub.list", group: "PROXY" },
-  { name: "microsoft", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Microsoft/Microsoft.list", group: "微软服务" },
-  { name: "google", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Google/Google.list", group: "谷歌服务" },
-  { name: "apple", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/Apple/Apple.list", group: "苹果服务" },
-  { name: "bilibili", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/BiliBili/BiliBili.list", group: "哔哩哔哩" },
-  { name: "neteasemusic", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/NetEaseMusic/NetEaseMusic.list", group: "DIRECT" },
-  { name: "baidu", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Baidu/Baidu.list", group: "DIRECT" },
-  { name: "douban", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/DouBan/DouBan.list", group: "DIRECT" },
-  { name: "wechat", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/WeChat/WeChat.list", group: "DIRECT" },
-  { name: "sina", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Sina/Sina.list", group: "DIRECT" },
-  { name: "zhihu", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/Zhihu/Zhihu.list", group: "DIRECT" },
-  { name: "xiaohongshu", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/XiaoHongShu/XiaoHongShu.list", group: "DIRECT" },
-  { name: "douyin", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/DouYin/DouYin.list", group: "DIRECT" },
-  { name: "tiktok", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket/TikTok/TikTok.list", group: "TIKTOK" },
-  { name: "global", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/Global/Global.list", group: "PROXY" },
-  { name: "china", url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/China/China.list", group: "DIRECT" },
-];
 
 function parseVless(raw) {
   const u = new URL(raw);
@@ -994,12 +1134,13 @@ function yamlLines(value, indent) {
     const lines = [];
     for (const [key, val] of Object.entries(value)) {
       if (val === undefined) continue;
+      const k = yamlKey(key);
       if (isScalar(val)) {
-        lines.push(`${pad}${key}: ${yamlScalar(val)}`);
+        lines.push(`${pad}${k}: ${yamlScalar(val)}`);
       } else if (Array.isArray(val) && val.length === 0) {
-        lines.push(`${pad}${key}: []`);
+        lines.push(`${pad}${k}: []`);
       } else {
-        lines.push(`${pad}${key}:`);
+        lines.push(`${pad}${k}:`);
         lines.push(...yamlLines(val, indent + 1));
       }
     }
@@ -1020,5 +1161,11 @@ function yamlScalar(v) {
   const s = String(v);
   if (s === "") return '""';
   if (/^[A-Za-z0-9._/@:-]+$/.test(s)) return s;
+  return JSON.stringify(s);
+}
+
+function yamlKey(key) {
+  const s = String(key);
+  if (/^[A-Za-z0-9_-]+$/.test(s)) return s;
   return JSON.stringify(s);
 }

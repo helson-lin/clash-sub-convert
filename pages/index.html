@@ -203,7 +203,7 @@
           ></textarea>
         </label>
 
-        <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
           <label class="space-y-1">
             <span id="labelFormat" class="text-sm text-ink/70">输出格式</span>
             <select
@@ -212,19 +212,6 @@
             >
               <option id="optFormatProfile" value="profile">profile（完整配置）</option>
               <option id="optFormatProvider" value="provider">provider（仅 proxies）</option>
-            </select>
-          </label>
-
-          <label class="space-y-1">
-            <span id="labelUdpPolicy" class="text-sm text-ink/70">UDP443(CN) 策略</span>
-            <select
-              id="udp443cnPolicy"
-              class="select-native h-12 w-full rounded-xl border border-ink/20 bg-white px-3 pr-12 leading-none text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
-            >
-              <option id="optUdpDirect" value="DIRECT">DIRECT（默认）</option>
-              <option id="optUdpProxy" value="节点选择">节点选择</option>
-              <option id="optUdpAuto" value="自动测速">自动测速</option>
-              <option id="optUdpReject" value="REJECT">REJECT</option>
             </select>
           </label>
 

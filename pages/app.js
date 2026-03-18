@@ -6,7 +6,6 @@ const el = {
   urlsText: document.getElementById("urlsText"),
   subText: document.getElementById("subText"),
   format: document.getElementById("format"),
-  udp443cnPolicy: document.getElementById("udp443cnPolicy"),
   convertBtn: document.getElementById("convertBtn"),
   genGetBtn: document.getElementById("genGetBtn"),
   genShortBtn: document.getElementById("genShortBtn"),
@@ -42,11 +41,6 @@ const I18N = {
     label_format: "输出格式",
     opt_format_profile: "profile（完整配置）",
     opt_format_provider: "provider（仅 proxies）",
-    label_udp_policy: "UDP443(CN) 策略",
-    opt_udp_direct: "DIRECT（默认）",
-    opt_udp_proxy: "节点选择",
-    opt_udp_auto: "自动测速",
-    opt_udp_reject: "REJECT",
     policy_hint: "profile 模式自动附带固定分流策略（不可修改）",
     group_yaml: "YAML 功能",
     btn_convert: "转换",
@@ -93,11 +87,6 @@ const I18N = {
     label_format: "Output Format",
     opt_format_profile: "profile (full config)",
     opt_format_provider: "provider (proxies only)",
-    label_udp_policy: "UDP443(CN) Policy",
-    opt_udp_direct: "DIRECT (default)",
-    opt_udp_proxy: "Proxy Select",
-    opt_udp_auto: "Auto Test",
-    opt_udp_reject: "REJECT",
     policy_hint: "Fixed routing rules are auto-applied in profile mode (not editable).",
     group_yaml: "YAML Actions",
     btn_convert: "Convert",
@@ -211,11 +200,6 @@ function applyI18n(lang) {
   setText("labelFormat", t("label_format"));
   setText("optFormatProfile", t("opt_format_profile"));
   setText("optFormatProvider", t("opt_format_provider"));
-  setText("labelUdpPolicy", t("label_udp_policy"));
-  setText("optUdpDirect", t("opt_udp_direct"));
-  setText("optUdpProxy", t("opt_udp_proxy"));
-  setText("optUdpAuto", t("opt_udp_auto"));
-  setText("optUdpReject", t("opt_udp_reject"));
   setText("policyHint", t("policy_hint"));
   setText("groupYaml", t("group_yaml"));
   setText("btnConvertText", t("btn_convert"));
@@ -310,7 +294,6 @@ function prepareRequest() {
 
   const params = new URLSearchParams();
   params.set("format", el.format.value);
-  params.set("udp443cnPolicy", el.udp443cnPolicy.value);
   const endpoint = `${workerBase}/convert?${params.toString()}`;
 
   const mode = el.inputMode.value;
@@ -331,7 +314,6 @@ function buildGetUrl() {
 
   const params = new URLSearchParams();
   params.set("format", el.format.value);
-  params.set("udp443cnPolicy", el.udp443cnPolicy.value);
 
   if (prepared.urls.length) {
     for (const u of prepared.urls) {
