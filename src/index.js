@@ -95,7 +95,11 @@ export default {
     try {
       const input = await resolveInput(request, url);
       const format = (url.searchParams.get("format") || "profile").toLowerCase();
-      const parsed = buildClashConfig(input, format);
+      const remoteConfigUrl = url.searchParams.get("config");
+      const subConverterCustom = remoteConfigUrl
+        ? await fetchAndParseSubconverterConfig(remoteConfigUrl)
+        : null;
+      const parsed = await buildClashConfig(input, format, { subConverterCustom });
 
       if (parsed.proxies.length === 0) {
         return textResponse(
@@ -206,7 +210,14 @@ async function resolveInput(request, url) {
     }
     if (!/^https?:\/\//i.test(normalized)) {
       // Allow passing direct node links/base64 text via url parameter.
-      directSub.push(normalized);
+      const items = extractNodeLines(normalized);
+      for (const item of items) {
+        if (/^https?:\/\//i.test(item)) {
+          sources.push(item);
+        } else {
+          lines.push(item);
+        }
+      }
       continue;
     }
     try {
@@ -233,7 +244,7 @@ async function resolveInput(request, url) {
   };
 }
 
-function buildClashConfig(input, format = "profile") {
+async function buildClashConfig(input, format = "profile", options = {}) {
   const proxies = [];
   const errors = [...input.errors];
 
@@ -278,7 +289,7 @@ function buildClashConfig(input, format = "profile") {
 
   dedupeProxyNames(proxies);
 
-  const profileConfig = buildProfileConfig(proxies);
+  const profileConfig = await buildProfileConfig(proxies, options);
   const providerConfig = { proxies };
 
   const config =
@@ -287,61 +298,18 @@ function buildClashConfig(input, format = "profile") {
   return { proxies, errors, config };
 }
 
-function buildProfileConfig(proxies) {
+async function buildProfileConfig(proxies, options = {}) {
   const proxyNames = proxies.map((p) => p.name);
   const all = proxyNames.length ? proxyNames : ["DIRECT"];
 
-  return {
+  const defaultConfig = {
     "mixed-port": 7890,
-    "tcp-concurrent": false,
     "allow-lan": true,
-    ipv6: true,
     mode: "Rule",
     "log-level": "info",
-    "global-client-fingerprint": "chrome",
-    "find-process-mode": "strict",
     "external-controller": "0.0.0.0:9090",
-    "geodata-mode": true,
-    "geo-auto-update": true,
-    "geo-update-interval": 3,
-    "geox-url": {
-      geoip: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat",
-      geosite: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat",
-      mmdb: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb",
-      asn: "https://mirror.ghproxy.com/https://github.com/xishang0128/geoip/releases/download/latest/GeoLite2-ASN.mmdb",
-    },
-    profile: {
-      "store-selected": true,
-      "store-fake-ip": true,
-    },
-    sniffer: {
-      enable: true,
-      "parse-pure-ip": true,
-      sniff: {
-        HTTP: {
-          ports: [80, "8080-8800"],
-          "override-destination": true,
-        },
-        TLS: {
-          ports: [443, 8443],
-        },
-        QUIC: {
-          ports: [443, 8443],
-        },
-      },
-      "skip-domain": ["Mijia Cloud", "dlg.io.mi.com", "+.apple.com"],
-    },
-    tun: {
-      enable: false,
-      stack: "mixed",
-      "dns-hijack": ["any:53"],
-      "auto-route": true,
-      "auto-detect-interface": true,
-    },
     dns: {
       enable: true,
-      ipv6: true,
-      "prefer-h3": true,
       listen: "0.0.0.0:53",
       "enhanced-mode": "fake-ip",
       "fake-ip-range": "198.18.0.1/16",
@@ -387,25 +355,18 @@ function buildProfileConfig(proxies) {
         "time.*.apple.com",
       ],
       "default-nameserver": ["223.5.5.5", "119.29.29.29"],
-      "nameserver-policy": {
-        "www.baidu.com": "114.114.114.114",
-        "+.internal.crop.com": "10.0.0.1",
-        "www.baidu.com,+.google.cn": "https://doh.pub/dns-query",
-        "geosite:private,apple": "https://dns.alidns.com/dns-query",
-        "rule-set:google": "8.8.8.8",
-      },
       nameserver: ["https://doh.pub/dns-query", "https://dns.alidns.com/dns-query"],
+      "nameserver-policy": {
+        "geosite:cn": ["https://doh.pub/dns-query", "https://dns.alidns.com/dns-query"],
+      },
       fallback: [
-        "https://1.1.1.2/dns-query",
-        "https://1.0.0.2/dns-query",
-        "https://208.67.222.222/dns-query",
-        "https://208.67.220.220/dns-query",
-        "https://9.9.9.9/dns-query",
+        "https://dns.google/dns-query",
+        "https://cloudflare-dns.com/dns-query",
+        "https://dns.quad9.net/dns-query",
       ],
       "fallback-filter": {
         geoip: true,
         "geoip-code": "CN",
-        geosite: ["gfw"],
         ipcidr: ["240.0.0.0/4", "0.0.0.0/32"],
         domain: [
           "+.google.com",
@@ -413,8 +374,6 @@ function buildProfileConfig(proxies) {
           "+.facebook.com",
           "+.twitter.com",
           "+.youtube.com",
-          "+.google.cn",
-          "+.googleapis.cn",
           "+.googleapis.com",
         ],
       },
@@ -422,148 +381,295 @@ function buildProfileConfig(proxies) {
     proxies,
     "proxy-groups": [
       {
-        name: "PROXY",
+        name: "🚀 节点选择",
         type: "select",
-        proxies: ["LOAD-BALANCE", "SELECT", "FALLBACK", "DIRECT"],
+        proxies: ["⚡ 自动选择", "DIRECT", ...all],
       },
       {
-        name: "SELECT",
-        type: "select",
-        proxies: all,
-      },
-      {
-        name: "LOAD-BALANCE",
-        type: "load-balance",
+        name: "⚡ 自动选择",
+        type: "url-test",
         url: "https://cp.cloudflare.com/generate_204",
-        interval: 3600,
-        strategy: "consistent-hashing",
+        interval: 300,
+        tolerance: 50,
         proxies: all,
       },
       {
-        name: "FALLBACK",
-        type: "fallback",
-        url: "https://cp.cloudflare.com/generate_204",
-        interval: 3600,
-        proxies: all,
-      },
-      {
-        name: "FINAL",
+        name: "💬 AI 服务",
         type: "select",
-        proxies: ["PROXY", "DIRECT"],
+        proxies: ["🚀 节点选择", "⚡ 自动选择", "DIRECT", ...all],
+      },
+      {
+        name: "📹 油管视频",
+        type: "select",
+        proxies: ["🚀 节点选择", "⚡ 自动选择", "DIRECT", ...all],
+      },
+      {
+        name: "🔍 谷歌服务",
+        type: "select",
+        proxies: ["🚀 节点选择", "⚡ 自动选择", "DIRECT", ...all],
+      },
+      {
+        name: "🔒 国内服务",
+        type: "select",
+        proxies: ["DIRECT", "🚀 节点选择"],
+      },
+      {
+        name: "📲 电报消息",
+        type: "select",
+        proxies: ["🚀 节点选择", "⚡ 自动选择", "DIRECT", ...all],
+      },
+      {
+        name: "🐱 Github",
+        type: "select",
+        proxies: ["🚀 节点选择", "⚡ 自动选择", "DIRECT", ...all],
+      },
+      {
+        name: "🌐 非中国",
+        type: "select",
+        proxies: ["🚀 节点选择", "⚡ 自动选择", "DIRECT", ...all],
+      },
+      {
+        name: "🐟 漏网之鱼",
+        type: "select",
+        proxies: ["🚀 节点选择", "⚡ 自动选择", "DIRECT", ...all],
       },
     ],
-    "rule-providers": {
-      reject: {
-        type: "http",
-        behavior: "domain",
-        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/reject.txt",
-        path: "./ruleset/reject.yaml",
-        interval: 86400,
-      },
-      icloud: {
-        type: "http",
-        behavior: "domain",
-        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/icloud.txt",
-        path: "./ruleset/icloud.yaml",
-        interval: 86400,
-      },
-      apple: {
-        type: "http",
-        behavior: "domain",
-        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/apple.txt",
-        path: "./ruleset/apple.yaml",
-        interval: 86400,
-      },
-      google: {
-        type: "http",
-        behavior: "domain",
-        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/google.txt",
-        path: "./ruleset/google.yaml",
-        interval: 86400,
-      },
-      proxy: {
-        type: "http",
-        behavior: "domain",
-        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/proxy.txt",
-        path: "./ruleset/proxy.yaml",
-        interval: 86400,
-      },
-      direct: {
-        type: "http",
-        behavior: "domain",
-        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/direct.txt",
-        path: "./ruleset/direct.yaml",
-        interval: 86400,
-      },
-      private: {
-        type: "http",
-        behavior: "domain",
-        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/private.txt",
-        path: "./ruleset/private.yaml",
-        interval: 86400,
-      },
-      gfw: {
-        type: "http",
-        behavior: "domain",
-        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/gfw.txt",
-        path: "./ruleset/gfw.yaml",
-        interval: 86400,
-      },
-      "tld-not-cn": {
-        type: "http",
-        behavior: "domain",
-        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/tld-not-cn.txt",
-        path: "./ruleset/tld-not-cn.yaml",
-        interval: 86400,
-      },
-      telegramcidr: {
-        type: "http",
-        behavior: "ipcidr",
-        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/telegramcidr.txt",
-        path: "./ruleset/telegramcidr.yaml",
-        interval: 86400,
-      },
-      cncidr: {
-        type: "http",
-        behavior: "ipcidr",
-        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/cncidr.txt",
-        path: "./ruleset/cncidr.yaml",
-        interval: 86400,
-      },
-      lancidr: {
-        type: "http",
-        behavior: "ipcidr",
-        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/lancidr.txt",
-        path: "./ruleset/lancidr.yaml",
-        interval: 86400,
-      },
-      applications: {
-        type: "http",
-        behavior: "classical",
-        url: "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/applications.txt",
-        path: "./ruleset/applications.yaml",
-        interval: 86400,
-      },
-    },
     rules: [
-      "RULE-SET,reject,REJECT",
-      "RULE-SET,apple,DIRECT",
-      "RULE-SET,applications,DIRECT",
-      "RULE-SET,cncidr,DIRECT",
-      "RULE-SET,direct,DIRECT",
-      "RULE-SET,icloud,DIRECT",
-      "RULE-SET,lancidr,DIRECT",
-      "RULE-SET,private,DIRECT",
-      "RULE-SET,proxy,PROXY",
-      "RULE-SET,gfw,PROXY",
-      "RULE-SET,google,PROXY",
-      "RULE-SET,telegramcidr,PROXY",
-      "RULE-SET,tld-not-cn,PROXY",
-      "GEOIP,LAN,DIRECT",
-      "GEOIP,CN,DIRECT",
-      "MATCH,FINAL",
+      "GEOSITE,cn,🔒 国内服务",
+      "GEOIP,cn,🔒 国内服务",
+      "DOMAIN-SUFFIX,openai.com,💬 AI 服务",
+      "DOMAIN-SUFFIX,chatgpt.com,💬 AI 服务",
+      "DOMAIN-SUFFIX,oaistatic.com,💬 AI 服务",
+      "DOMAIN-SUFFIX,oaiusercontent.com,💬 AI 服务",
+      "DOMAIN-SUFFIX,youtube.com,📹 油管视频",
+      "DOMAIN-SUFFIX,youtu.be,📹 油管视频",
+      "DOMAIN-SUFFIX,googlevideo.com,📹 油管视频",
+      "DOMAIN-SUFFIX,ytimg.com,📹 油管视频",
+      "DOMAIN-SUFFIX,google.com,🔍 谷歌服务",
+      "DOMAIN-SUFFIX,googleapis.com,🔍 谷歌服务",
+      "DOMAIN-SUFFIX,gstatic.com,🔍 谷歌服务",
+      "DOMAIN-SUFFIX,github.com,🐱 Github",
+      "DOMAIN-SUFFIX,githubusercontent.com,🐱 Github",
+      "DOMAIN-SUFFIX,githubassets.com,🐱 Github",
+      "DOMAIN-SUFFIX,gitlab.com,🐱 Github",
+      "GEOIP,google,🔍 谷歌服务",
+      "GEOIP,telegram,📲 电报消息",
+      "MATCH,🐟 漏网之鱼",
     ],
   };
+
+  const custom = options?.subConverterCustom;
+  if (!custom || custom.enableRuleGenerator === false) {
+    return defaultConfig;
+  }
+
+  const customGroups = buildGroupsFromSubConverter(custom, all);
+  const customRules = await buildRulesFromSubConverter(custom);
+
+  if (!customGroups.length && !customRules.length) {
+    return defaultConfig;
+  }
+
+  return {
+    ...defaultConfig,
+    "proxy-groups": custom.overwriteOriginalRules
+      ? customGroups.length
+        ? customGroups
+        : defaultConfig["proxy-groups"]
+      : [...defaultConfig["proxy-groups"], ...customGroups],
+    rules: custom.overwriteOriginalRules
+      ? customRules.length
+        ? customRules
+        : defaultConfig.rules
+      : [...defaultConfig.rules, ...customRules],
+  };
+}
+
+async function fetchAndParseSubconverterConfig(configUrl) {
+  let u;
+  try {
+    u = new URL(configUrl);
+  } catch {
+    throw new Error("invalid config URL");
+  }
+  if (!/^https?:$/i.test(u.protocol)) {
+    throw new Error("config URL must be http/https");
+  }
+
+  const resp = await fetch(u.toString(), {
+    headers: {
+      "user-agent": "sub-convert-worker/1.0",
+      accept: "text/plain,*/*",
+    },
+  });
+  if (!resp.ok) {
+    throw new Error(`fetch config failed: HTTP ${resp.status}`);
+  }
+
+  const text = await resp.text();
+  return parseSubconverterCustomConfig(text);
+}
+
+function parseSubconverterCustomConfig(text) {
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map((v) => v.trim())
+    .filter((v) => v && !v.startsWith("#") && !v.startsWith(";"));
+
+  let inCustom = false;
+  const out = {
+    ruleset: [],
+    proxyGroups: [],
+    enableRuleGenerator: false,
+    overwriteOriginalRules: false,
+  };
+
+  for (const line of lines) {
+    if (/^\[custom\]$/i.test(line)) {
+      inCustom = true;
+      continue;
+    }
+    if (/^\[.+\]$/.test(line) && !/^\[custom\]$/i.test(line)) {
+      inCustom = false;
+      continue;
+    }
+    if (!inCustom) continue;
+
+    const eq = line.indexOf("=");
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim().toLowerCase();
+    const value = line.slice(eq + 1).trim();
+
+    if (key === "ruleset") {
+      out.ruleset.push(value);
+    } else if (key === "custom_proxy_group") {
+      out.proxyGroups.push(value);
+    } else if (key === "enable_rule_generator") {
+      out.enableRuleGenerator = /^true$/i.test(value);
+    } else if (key === "overwrite_original_rules") {
+      out.overwriteOriginalRules = /^true$/i.test(value);
+    }
+  }
+
+  return out;
+}
+
+async function buildRulesFromSubConverter(custom) {
+  const rules = [];
+  const fetchCache = new Map();
+
+  for (const raw of custom.ruleset || []) {
+    const firstComma = raw.indexOf(",");
+    if (firstComma <= 0) continue;
+
+    const group = raw.slice(0, firstComma).trim();
+    const rest = raw
+      .slice(firstComma + 1)
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+    if (!group || rest.length === 0) continue;
+
+    const first = rest[0].startsWith("[]") ? rest[0].slice(2) : rest[0];
+    const args = rest.slice(1);
+    const firstUpper = first.toUpperCase();
+
+    if (/^https?:\/\//i.test(first)) {
+      const remoteRules = await fetchRulesetAsRules(first, group, fetchCache);
+      rules.push(...remoteRules);
+      continue;
+    }
+
+    if (firstUpper === "FINAL" || firstUpper === "MATCH") {
+      rules.push(`MATCH,${group}`);
+      continue;
+    }
+
+    if (
+      firstUpper === "GEOSITE" ||
+      firstUpper === "GEOIP" ||
+      firstUpper === "DOMAIN" ||
+      firstUpper === "DOMAIN-SUFFIX" ||
+      firstUpper === "DOMAIN-KEYWORD" ||
+      firstUpper === "IP-CIDR" ||
+      firstUpper === "IP-CIDR6" ||
+      firstUpper === "SRC-IP-CIDR" ||
+      firstUpper === "SRC-PORT" ||
+      firstUpper === "DST-PORT" ||
+      firstUpper === "PROCESS-NAME" ||
+      firstUpper === "PROCESS-PATH" ||
+      firstUpper === "NETWORK" ||
+      firstUpper === "IN-TYPE" ||
+      firstUpper === "IN-PORT" ||
+      firstUpper === "UID"
+    ) {
+      if (!args[0]) continue;
+      const noResolve = args.slice(1).some((v) => String(v).toLowerCase() === "no-resolve");
+      rules.push(`${firstUpper},${args[0]},${group}${noResolve ? ",no-resolve" : ""}`);
+      continue;
+    }
+
+    if (firstUpper === "RULE-SET") {
+      if (!args[0]) continue;
+      const noResolve = args.slice(1).some((v) => String(v).toLowerCase() === "no-resolve");
+      rules.push(`RULE-SET,${args[0]},${group}${noResolve ? ",no-resolve" : ""}`);
+      continue;
+    }
+
+    // Unknown ruleset directive is ignored for compatibility safety.
+  }
+
+  return unique(rules);
+}
+
+function buildGroupsFromSubConverter(custom, allProxies) {
+  const groups = [];
+
+  for (const raw of custom.proxyGroups || []) {
+    const seg = raw.split("`").map((s) => s.trim()).filter(Boolean);
+    if (seg.length < 2) continue;
+
+    const name = seg[0];
+    const type = seg[1].toLowerCase();
+    const tail = seg.slice(2);
+
+    const opts = tail.filter((s) => s.startsWith("[]")).map((s) => s.slice(2));
+    const hasAll = tail.includes(".*");
+    const proxies = unique([
+      ...opts.filter(Boolean),
+      ...(hasAll ? allProxies : []),
+    ]);
+
+    if (type === "select") {
+      groups.push({
+        name,
+        type: "select",
+        proxies: proxies.length ? proxies : allProxies,
+      });
+      continue;
+    }
+
+    if (type === "url-test" || type === "fallback" || type === "load-balance") {
+      const url = tail.find((v) => /^https?:\/\//i.test(v)) || "http://www.gstatic.com/generate_204";
+      const numSeg = tail.find((v) => /^\d+(,\d*)*(,\d+)?$/.test(v)) || "300,,50";
+      const nums = numSeg.split(",");
+      const interval = Number(nums[0] || 300);
+      const tolerance = Number(nums[2] || 50);
+
+      const g = {
+        name,
+        type,
+        url,
+        interval: Number.isFinite(interval) ? interval : 300,
+        proxies: proxies.length ? proxies : allProxies,
+      };
+      if (type === "url-test") g.tolerance = Number.isFinite(tolerance) ? tolerance : 50;
+      if (type === "load-balance") g.strategy = "consistent-hashing";
+      groups.push(g);
+    }
+  }
+
+  return groups;
 }
 
 function parseVless(raw) {
@@ -1068,6 +1174,83 @@ function normalizeInputToken(value) {
   }
 
   return s;
+}
+
+async function fetchRulesetAsRules(ruleUrl, group, cache) {
+  const key = `${ruleUrl}@@${group}`;
+  if (cache.has(key)) return cache.get(key);
+
+  const promise = (async () => {
+    const resp = await fetch(ruleUrl, {
+      headers: {
+        "user-agent": "sub-convert-worker/1.0",
+        accept: "text/plain,*/*",
+      },
+    });
+    if (!resp.ok) {
+      throw new Error(`fetch ruleset failed: ${ruleUrl} HTTP ${resp.status}`);
+    }
+    const text = await resp.text();
+    return parseRulesetTextToRules(text, group);
+  })();
+
+  cache.set(key, promise);
+  return promise;
+}
+
+function parseRulesetTextToRules(text, group) {
+  const out = [];
+  const lines = String(text || "").split(/\r?\n/);
+
+  for (let raw of lines) {
+    raw = String(raw || "").trim();
+    if (!raw || raw.startsWith("#") || raw.startsWith(";") || raw.startsWith("//")) continue;
+    if (/^payload\s*:/i.test(raw)) continue;
+    if (raw.startsWith("-")) raw = raw.slice(1).trim();
+    if (!raw) continue;
+    raw = raw.replace(/^['"]+|['"]+$/g, "");
+
+    const parts = raw
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+    if (!parts.length) continue;
+
+    const type = parts[0].toUpperCase();
+    const known = new Set([
+      "DOMAIN",
+      "DOMAIN-SUFFIX",
+      "DOMAIN-KEYWORD",
+      "GEOSITE",
+      "GEOIP",
+      "IP-CIDR",
+      "IP-CIDR6",
+      "SRC-IP-CIDR",
+      "SRC-PORT",
+      "DST-PORT",
+      "PROCESS-NAME",
+      "PROCESS-PATH",
+      "NETWORK",
+      "IN-TYPE",
+      "IN-PORT",
+      "UID",
+      "MATCH",
+    ]);
+
+    if (!known.has(type)) continue;
+    if (type === "MATCH") {
+      out.push(`MATCH,${group}`);
+      continue;
+    }
+    if (!parts[1]) continue;
+
+    const tailFlags = parts
+      .slice(2)
+      .filter((v) => String(v).toLowerCase() === "no-resolve");
+    out.push(`${type},${parts[1]},${group}${tailFlags.length ? ",no-resolve" : ""}`);
+  }
+
+  return out;
 }
 
 function unique(arr) {

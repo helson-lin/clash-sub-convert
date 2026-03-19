@@ -1,5 +1,7 @@
 const el = {
   workerUrl: document.getElementById("workerUrl"),
+  configPreset: document.getElementById("configPreset"),
+  configUrl: document.getElementById("configUrl"),
   inputMode: document.getElementById("inputMode"),
   urlsField: document.getElementById("urlsField"),
   subField: document.getElementById("subField"),
@@ -20,8 +22,17 @@ const el = {
 };
 
 let outputText = "";
-const DEFAULT_WORKER_URL = "https://convert.oimi.cc.cd";
+let highlightLoadPromise = null;
+const DEFAULT_WORKER_URL = "https://meta.oimi.cc.cd";
+const DEFAULT_CONFIG_URL = "https://r2.oimi.space/Clash/base.ini";
+const PRO_CONFIG_URL = "https://r2.oimi.space/Clash/pro.ini";
+const LEGACY_DEFAULT_CONFIG_URL =
+  "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online.ini";
 const DEFAULT_LANG = "zh-CN";
+const HIGHLIGHT_SCRIPT_URL =
+  "https://cdn.bootcdn.net/ajax/libs/highlight.js/11.11.1/highlight.min.js";
+const HIGHLIGHT_YAML_URL =
+  "https://cdn.bootcdn.net/ajax/libs/highlight.js/11.11.1/languages/yaml.min.js";
 
 const I18N = {
   "zh-CN": {
@@ -30,14 +41,20 @@ const I18N = {
     title: "Clash.Meta 订阅转换面板",
     subtitle:
       "支持 vless / vmess / hysteria2 / tuic / anytls / ss / trojan，自动附带固定分流策略。",
+    github_label: "GitHub 开源地址：",
     label_worker_url: "Worker 地址",
     label_input_mode: "输入类型",
+    label_config_url: "远程配置 URL",
+    opt_config_base: "基础版本（base.ini）",
+    opt_config_pro: "进阶版本（pro.ini）",
+    opt_config_custom: "自定义 URL",
     opt_mode_urls: "多个订阅 URL",
     opt_mode_sub: "原始订阅文本 / base64 / 节点链接（可混写）",
     label_urls_text: "订阅 URL（每行一个）",
     ph_urls_text: "https://example.com/sub1\nhttps://example.com/sub2",
     label_sub_text: "原始订阅内容",
     ph_sub_text: "可混写：http(s)订阅地址 + 节点链接 + base64",
+    ph_config_url: "https://r2.oimi.space/Clash/base.ini",
     label_format: "输出格式",
     opt_format_profile: "profile（完整配置）",
     opt_format_provider: "provider（仅 proxies）",
@@ -47,6 +64,7 @@ const I18N = {
     btn_copy: "复制",
     btn_download: "下载 YAML",
     group_link: "订阅链接功能",
+    link_warning: "短链服务会存储节点信息",
     btn_gen_get: "生成订阅链接并复制",
     btn_gen_short: "生成短链并复制",
     label_generated_url: "生成的 GET 请求地址",
@@ -76,14 +94,20 @@ const I18N = {
     title: "Clash.Meta Subscription Converter",
     subtitle:
       "Supports vless / vmess / hysteria2 / tuic / anytls / ss / trojan with built-in fixed routing rules.",
+    github_label: "GitHub Repository:",
     label_worker_url: "Worker URL",
     label_input_mode: "Input Mode",
+    label_config_url: "Remote Config URL",
+    opt_config_base: "Base (base.ini)",
+    opt_config_pro: "Pro (pro.ini)",
+    opt_config_custom: "Custom URL",
     opt_mode_urls: "Multiple Subscription URLs",
     opt_mode_sub: "Raw Subscription / base64 / Node Links (Mixed)",
     label_urls_text: "Subscription URLs (one per line)",
     ph_urls_text: "https://example.com/sub1\nhttps://example.com/sub2",
     label_sub_text: "Raw Subscription Content",
     ph_sub_text: "Mix supported: http(s) URL + node links + base64",
+    ph_config_url: "https://r2.oimi.space/Clash/base.ini",
     label_format: "Output Format",
     opt_format_profile: "profile (full config)",
     opt_format_provider: "provider (proxies only)",
@@ -93,6 +117,7 @@ const I18N = {
     btn_copy: "Copy",
     btn_download: "Download YAML",
     group_link: "Subscription Link Actions",
+    link_warning: "Short-link service will store node information.",
     btn_gen_get: "Generate & Copy GET URL",
     btn_gen_short: "Generate & Copy Short URL",
     label_generated_url: "Generated GET URL",
@@ -132,6 +157,12 @@ function boot() {
   applyI18n(currentLang);
 
   el.workerUrl.value = localStorage.getItem("worker_url") || DEFAULT_WORKER_URL;
+  if (el.configUrl) {
+    const saved = localStorage.getItem("config_url");
+    el.configUrl.value =
+      saved && saved !== LEGACY_DEFAULT_CONFIG_URL ? saved : DEFAULT_CONFIG_URL;
+    syncConfigPresetFromUrl();
+  }
 
   el.inputMode.addEventListener("change", syncMode);
   el.convertBtn.addEventListener("click", convert);
@@ -144,6 +175,22 @@ function boot() {
     el.workerUrl.addEventListener("change", () => {
       localStorage.setItem("worker_url", el.workerUrl.value.trim());
     });
+  }
+  if (el.configUrl) {
+    el.configUrl.addEventListener("change", () => {
+      localStorage.setItem("config_url", el.configUrl.value.trim());
+      syncConfigPresetFromUrl();
+    });
+  }
+  if (el.configPreset) {
+    const onPresetChange = () => {
+      applyConfigPresetToUrl();
+      if (el.configUrl) {
+        localStorage.setItem("config_url", el.configUrl.value.trim());
+      }
+    };
+    el.configPreset.addEventListener("change", onPresetChange);
+    el.configPreset.addEventListener("input", onPresetChange);
   }
 
   if (el.langSwitch) {
@@ -191,8 +238,13 @@ function applyI18n(lang) {
   setText("loadingText", t("loading_text"));
   setText("titleText", t("title"));
   setText("subtitleText", t("subtitle"));
+  setText("githubLabel", t("github_label"));
   setText("labelWorkerUrl", t("label_worker_url"));
   setText("labelInputMode", t("label_input_mode"));
+  setText("labelConfigUrl", t("label_config_url"));
+  setText("optConfigBase", t("opt_config_base"));
+  setText("optConfigPro", t("opt_config_pro"));
+  setText("optConfigCustom", t("opt_config_custom"));
   setText("optModeUrls", t("opt_mode_urls"));
   setText("optModeSub", t("opt_mode_sub"));
   setText("labelUrlsText", t("label_urls_text"));
@@ -206,6 +258,7 @@ function applyI18n(lang) {
   setText("btnCopyText", t("btn_copy"));
   setText("btnDownloadText", t("btn_download"));
   setText("groupLink", t("group_link"));
+  setText("linkWarning", t("link_warning"));
   setText("btnGenGetText", t("btn_gen_get"));
   setText("btnGenShortText", t("btn_gen_short"));
   setText("labelGeneratedUrl", t("label_generated_url"));
@@ -213,6 +266,7 @@ function applyI18n(lang) {
 
   if (el.urlsText) el.urlsText.placeholder = t("ph_urls_text");
   if (el.subText) el.subText.placeholder = t("ph_sub_text");
+  if (el.configUrl) el.configUrl.placeholder = t("ph_config_url");
   if (el.generatedUrl) el.generatedUrl.placeholder = t("ph_generated_url");
 
   if (!outputText || outputText.startsWith("# ")) {
@@ -224,6 +278,23 @@ function syncMode() {
   const urlsMode = el.inputMode.value === "urls";
   el.urlsField.classList.toggle("hidden", !urlsMode);
   el.subField.classList.toggle("hidden", urlsMode);
+}
+
+function syncConfigPresetFromUrl() {
+  if (!el.configPreset || !el.configUrl) return;
+  const v = el.configUrl.value.trim();
+  if (v === DEFAULT_CONFIG_URL) el.configPreset.value = "base";
+  else if (v === PRO_CONFIG_URL) el.configPreset.value = "pro";
+  else el.configPreset.value = "custom";
+}
+
+function applyConfigPresetToUrl() {
+  if (!el.configPreset || !el.configUrl) return;
+  if (el.configPreset.value === "base") {
+    el.configUrl.value = DEFAULT_CONFIG_URL;
+  } else if (el.configPreset.value === "pro") {
+    el.configUrl.value = PRO_CONFIG_URL;
+  }
 }
 
 function setStatus(message, isError = false) {
@@ -242,12 +313,63 @@ function splitLines(text) {
 function renderOutput(text) {
   outputText = text || "";
   if (el.outputCode) el.outputCode.textContent = outputText;
-  if (window.hljs && el.outputCode) {
-    window.hljs.highlightElement(el.outputCode);
-  }
   const hasContent = Boolean(outputText && !outputText.startsWith("# "));
+  if (hasContent) {
+    highlightOutput();
+  }
   if (el.copyBtn) el.copyBtn.disabled = !hasContent;
   if (el.downloadBtn) el.downloadBtn.disabled = !hasContent;
+}
+
+async function highlightOutput() {
+  if (!el.outputCode) return;
+  if (window.hljs) {
+    window.hljs.highlightElement(el.outputCode);
+    return;
+  }
+  await ensureHighlightReady();
+  if (window.hljs) {
+    window.hljs.highlightElement(el.outputCode);
+  }
+}
+
+function loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) {
+      if (existing.dataset.loaded === "1") {
+        resolve();
+      } else {
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener("error", () => reject(new Error(`load failed: ${src}`)), {
+          once: true,
+        });
+      }
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    script.addEventListener("load", () => {
+      script.dataset.loaded = "1";
+      resolve();
+    });
+    script.addEventListener("error", () => reject(new Error(`load failed: ${src}`)));
+    document.body.appendChild(script);
+  });
+}
+
+function ensureHighlightReady() {
+  if (window.hljs) return Promise.resolve();
+  if (highlightLoadPromise) return highlightLoadPromise;
+  highlightLoadPromise = (async () => {
+    await loadScriptOnce(HIGHLIGHT_SCRIPT_URL);
+    await loadScriptOnce(HIGHLIGHT_YAML_URL);
+  })().catch((error) => {
+    console.warn("highlight.js load skipped:", error);
+  });
+  return highlightLoadPromise;
 }
 
 async function convert() {
@@ -294,6 +416,8 @@ function prepareRequest() {
 
   const params = new URLSearchParams();
   params.set("format", el.format.value);
+  const configUrl = el.configUrl ? el.configUrl.value.trim() : "";
+  if (configUrl) params.set("config", configUrl);
   const endpoint = `${workerBase}/convert?${params.toString()}`;
 
   const mode = el.inputMode.value;
@@ -314,6 +438,8 @@ function buildGetUrl() {
 
   const params = new URLSearchParams();
   params.set("format", el.format.value);
+  const configUrl = el.configUrl ? el.configUrl.value.trim() : "";
+  if (configUrl) params.set("config", configUrl);
 
   if (prepared.urls.length) {
     for (const u of prepared.urls) {

@@ -1,301 +1,425 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Clash.Meta 订阅转换</title>
-    <link rel="icon" type="image/png" href="/favicon.ico" sizes="48x48" />
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Clash.Meta 订阅转换</title>
+        <meta
+            name="description"
+            content="Clash.Meta 订阅转换工具：支持 vless、vmess、hysteria2、tuic、anytls、ss、trojan，一键转换为 Clash.Meta YAML。"
+        />
+        <link rel="icon" type="image/png" href="/favicon.ico" sizes="48x48" />
 
-    <script src="https://storage.helson-lin.cn/cdnjs/tailwindcss.3.4.17.js"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              display: ["Inter", "sans-serif"],
-            },
-            colors: {
-              paper: "#F9F9F7",
-              ink: "#2D2D2B",
-              accent: "#CC7D5E",
-            },
-          },
-        },
-      };
-    </script>
+        <link rel="stylesheet" href="/tailwind.css?v=20260319-1" />
 
-    <script
-      async
-      defer
-      src="https://tj.helson-lin.cn/tracker.js"
-      data-website-id="cmmvthgm5000diit2sb3xl4ue"
-    ></script>
+        <script
+            async
+            defer
+            src="https://tj.helson-lin.cn/tracker.js"
+            data-website-id="cmmvthgm5000diit2sb3xl4ue"
+        ></script>
 
-    <link href="https://fonts.loli.net/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <link
+            rel="preload"
+            as="font"
+            href="/fonts/inter-latin.woff2"
+            type="font/woff2"
+            crossorigin
+        />
+        <link rel="stylesheet" href="/fonts.css?v=20260319-1" />
 
-    <link
-      rel="stylesheet"
-      href="https://cdn.bootcdn.net/ajax/libs/highlight.js/11.11.1/styles/github.min.css"
-    />
-
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "Clash.Meta Subscription Converter",
-        "applicationCategory": "DeveloperApplication",
-        "operatingSystem": "Web",
-        "url": "https://convert.oimi.cc.cd",
-        "description": "Convert vless, vmess, hysteria2, tuic, anytls, ss and trojan subscriptions to Clash.Meta config with fixed rule strategy and short links.",
-        "inLanguage": "zh-CN,en",
-        "keywords": "Clash.Meta, subscription converter, vless, vmess, hysteria2, tuic, anytls, ss, trojan, proxy-providers",
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD"
-        }
-      }
-    </script>
-
-    <style>
-      :root {
-        --paper: #f9f9f7;
-        --ink: #2d2d2b;
-        --accent: #cc7d5e;
-      }
-      .paper-grain {
-        background:
-          radial-gradient(circle at 15% 12%, rgba(204, 125, 94, 0.12), transparent 35%),
-          radial-gradient(circle at 88% 84%, rgba(45, 45, 43, 0.05), transparent 30%),
-          linear-gradient(180deg, rgba(0, 0, 0, 0.015), rgba(0, 0, 0, 0));
-      }
-      .yaml-preview pre {
-        margin: 0;
-        border-radius: 0.75rem;
-        height: 32rem;
-        overflow: auto;
-      }
-      .yaml-preview code {
-        display: block;
-        white-space: pre;
-      }
-      .select-native {
-        -webkit-appearance: none;
-        appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%232D2D2B' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 0.9rem center;
-        background-size: 1rem 1rem;
-      }
-      .loading-layer {
-        position: fixed;
-        inset: 0;
-        z-index: 60;
-        background: var(--paper);
-        display: grid;
-        place-items: center;
-        transition: opacity 420ms ease, visibility 420ms ease;
-      }
-      .loading-layer.hidden {
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
-      }
-      .loading-mark {
-        display: grid;
-        gap: 0.6rem;
-        justify-items: center;
-      }
-      .loading-dot {
-        width: 2.2rem;
-        height: 2.2rem;
-        border-radius: 999px;
-        border: 2px solid rgba(45, 45, 43, 0.16);
-        border-top-color: var(--accent);
-        animation: spin 900ms linear infinite;
-      }
-      .loading-text {
-        color: rgba(45, 45, 43, 0.72);
-        font-size: 0.9rem;
-      }
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-      @media (max-width: 768px) {
-        .yaml-preview pre {
-          height: 22rem;
-        }
-      }
-    </style>
-  </head>
-
-  <body class="font-display min-h-screen bg-paper text-ink">
-    <div id="loadingLayer" class="loading-layer" aria-live="polite">
-      <div class="loading-mark">
-        <div class="loading-dot"></div>
-        <div id="loadingText" class="loading-text">加载中...</div>
-      </div>
-    </div>
-
-    <div class="paper-grain fixed inset-0 -z-10"></div>
-
-    <main class="mx-auto w-full max-w-6xl px-4 py-8 lg:px-6">
-      <header class="mb-5">
-        <div class="mb-3 flex justify-end">
-          <select
-            id="langSwitch"
-            class="select-native h-10 rounded-xl border border-ink/20 bg-white px-3 pr-10 text-sm leading-none text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
-          >
-            <option value="zh-CN">中文</option>
-            <option value="en">English</option>
-          </select>
-        </div>
-
-        <h1 id="titleText" class="mt-1 text-2xl font-semibold md:text-4xl">Clash.Meta 订阅转换面板</h1>
-        <p id="subtitleText" class="mt-2 text-sm text-ink/70 md:text-base">
-          支持 vless / vmess / hysteria2 / tuic / anytls / ss / trojan，自动附带固定分流策略。
-        </p>
-      </header>
-
-      <section class="rounded-2xl border border-ink/15 bg-white/80 p-4 shadow-[0_8px_28px_rgba(45,45,43,0.08)] backdrop-blur md:p-5">
-        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <label class="space-y-1">
-            <span id="labelWorkerUrl" class="text-sm text-ink/70">Worker 地址</span>
-            <input
-              id="workerUrl"
-              type="url"
-              placeholder="https://sub-convert-worker.xxx.workers.dev"
-              class="h-12 w-full rounded-xl border border-ink/20 bg-white px-3 leading-none text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+        <link
+            rel="preload"
+            as="style"
+            href="https://cdn.bootcdn.net/ajax/libs/highlight.js/11.11.1/styles/github.min.css"
+            onload="this.onload=null;this.rel='stylesheet'"
+        />
+        <noscript>
+            <link
+                rel="stylesheet"
+                href="https://cdn.bootcdn.net/ajax/libs/highlight.js/11.11.1/styles/github.min.css"
             />
-          </label>
+        </noscript>
 
-          <label class="space-y-1">
-            <span id="labelInputMode" class="text-sm text-ink/70">输入类型</span>
-            <select
-              id="inputMode"
-              class="select-native h-12 w-full rounded-xl border border-ink/20 bg-white px-3 pr-12 leading-none text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+        <script type="application/ld+json">
+            {
+                "@context": "https://schema.org",
+                "@type": "WebApplication",
+                "name": "Clash.Meta Subscription Converter",
+                "applicationCategory": "DeveloperApplication",
+                "operatingSystem": "Web",
+                "url": "https://meta.oimi.cc.cd",
+                "description": "Convert vless, vmess, hysteria2, tuic, anytls, ss and trojan subscriptions to Clash.Meta config with fixed rule strategy and short links.",
+                "inLanguage": "zh-CN,en",
+                "keywords": "Clash.Meta, subscription converter, vless, vmess, hysteria2, tuic, anytls, ss, trojan, proxy-providers",
+                "offers": {
+                    "@type": "Offer",
+                    "price": "0",
+                    "priceCurrency": "USD"
+                }
+            }
+        </script>
+
+        <style>
+            :root {
+                --paper: #f9f9f7;
+                --ink: #2d2d2b;
+                --accent: #cc7d5e;
+            }
+            .paper-grain {
+                background:
+                    radial-gradient(
+                        circle at 15% 12%,
+                        rgba(204, 125, 94, 0.12),
+                        transparent 35%
+                    ),
+                    radial-gradient(
+                        circle at 88% 84%,
+                        rgba(45, 45, 43, 0.05),
+                        transparent 30%
+                    ),
+                    linear-gradient(
+                        180deg,
+                        rgba(0, 0, 0, 0.015),
+                        rgba(0, 0, 0, 0)
+                    );
+            }
+            .yaml-preview pre {
+                margin: 0;
+                border-radius: 0.75rem;
+                height: 32rem;
+                overflow: auto;
+            }
+            .yaml-preview code {
+                display: block;
+                white-space: pre;
+            }
+            .select-native {
+                -webkit-appearance: none;
+                appearance: none;
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%232D2D2B' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+                background-repeat: no-repeat;
+                background-position: right 0.9rem center;
+                background-size: 1rem 1rem;
+            }
+            .loading-layer {
+                position: fixed;
+                inset: 0;
+                z-index: 60;
+                background: var(--paper);
+                display: grid;
+                place-items: center;
+                transition:
+                    opacity 420ms ease,
+                    visibility 420ms ease;
+            }
+            .loading-layer.hidden {
+                opacity: 0;
+                visibility: hidden;
+                pointer-events: none;
+            }
+            .loading-mark {
+                display: grid;
+                gap: 0.6rem;
+                justify-items: center;
+            }
+            .loading-dot {
+                width: 2.2rem;
+                height: 2.2rem;
+                border-radius: 999px;
+                border: 2px solid rgba(45, 45, 43, 0.16);
+                border-top-color: var(--accent);
+                animation: spin 900ms linear infinite;
+            }
+            .loading-text {
+                color: rgba(45, 45, 43, 0.72);
+                font-size: 0.9rem;
+            }
+            @keyframes spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+            @media (max-width: 768px) {
+                .yaml-preview pre {
+                    height: 22rem;
+                }
+            }
+        </style>
+    </head>
+
+    <body class="font-display min-h-screen bg-paper text-ink">
+        <div id="loadingLayer" class="loading-layer" aria-live="polite">
+            <div class="loading-mark">
+                <div class="loading-dot"></div>
+                <div id="loadingText" class="loading-text">Loading...</div>
+            </div>
+        </div>
+
+        <div class="paper-grain fixed inset-0 -z-10"></div>
+
+        <main class="mx-auto w-full max-w-6xl px-4 py-8 lg:px-6">
+            <header class="mb-5">
+                <div class="mb-3 flex justify-end">
+                    <select
+                        id="langSwitch"
+                        class="select-native h-10 rounded-xl border border-ink/20 bg-white px-3 pr-10 text-sm leading-none text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+                    >
+                        <option value="zh-CN">中文</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+
+                <h1
+                    id="titleText"
+                    class="mt-1 text-2xl font-semibold md:text-4xl"
+                >
+                    Clash.Meta 订阅转换面板
+                </h1>
+                <p
+                    id="subtitleText"
+                    class="mt-2 text-sm text-ink/70 md:text-base"
+                >
+                    支持 vless / vmess / hysteria2 / tuic / anytls / ss /
+                    trojan，自动附带固定分流策略。
+                </p>
+                <p class="mt-2 text-sm text-ink/70">
+                    <span id="githubLabel">GitHub 开源地址：</span>
+                    <a
+                        href="https://github.com/helson-lin/clash-sub-convert"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="text-accent underline underline-offset-2"
+                        >https://github.com/helson-lin/clash-sub-convert</a
+                    >
+                </p>
+            </header>
+
+            <section
+                class="rounded-2xl border border-ink/15 bg-white/80 p-4 shadow-[0_8px_28px_rgba(45,45,43,0.08)] backdrop-blur md:p-5"
             >
-              <option id="optModeUrls" value="urls">多个订阅 URL</option>
-              <option id="optModeSub" value="sub" selected>原始订阅文本 / base64 / 节点链接（可混写）</option>
-            </select>
-          </label>
-        </div>
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <label class="space-y-1">
+                        <span id="labelWorkerUrl" class="text-sm text-ink/70"
+                            >Worker 地址</span
+                        >
+                        <input
+                            id="workerUrl"
+                            type="url"
+                            placeholder="https://sub-convert-worker.xxx.workers.dev"
+                            class="h-12 w-full rounded-xl border border-ink/20 bg-white px-3 leading-none text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+                        />
+                    </label>
 
-        <label id="urlsField" class="mt-3 block space-y-1">
-          <span id="labelUrlsText" class="text-sm text-ink/70">订阅 URL（每行一个）</span>
-          <textarea
-            id="urlsText"
-            rows="5"
-            placeholder="https://example.com/sub1&#10;https://example.com/sub2"
-            class="w-full rounded-xl border border-ink/20 bg-white px-3 py-2 text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
-          ></textarea>
-        </label>
+                    <label class="space-y-1">
+                        <span id="labelInputMode" class="text-sm text-ink/70"
+                            >输入类型</span
+                        >
+                        <select
+                            id="inputMode"
+                            class="select-native h-12 w-full rounded-xl border border-ink/20 bg-white px-3 pr-12 leading-none text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+                        >
+                            <option id="optModeUrls" value="urls">
+                                多个订阅 URL
+                            </option>
+                            <option id="optModeSub" value="sub" selected>
+                                原始订阅文本 / base64 / 节点链接（可混写）
+                            </option>
+                        </select>
+                    </label>
+                </div>
 
-        <label id="subField" class="mt-3 hidden block space-y-1">
-          <span id="labelSubText" class="text-sm text-ink/70">原始订阅内容</span>
-          <textarea
-            id="subText"
-            rows="7"
-            placeholder="可混写：http(s)订阅地址 + 节点链接 + base64"
-            class="w-full rounded-xl border border-ink/20 bg-white px-3 py-2 text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
-          ></textarea>
-        </label>
+                <label class="mt-3 block space-y-1">
+                    <span id="labelConfigUrl" class="text-sm text-ink/70"
+                        >远程配置 URL</span
+                    >
+                    <select
+                        id="configPreset"
+                        class="select-native mb-2 h-12 w-full rounded-xl border border-ink/20 bg-white px-3 pr-12 leading-none text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+                    >
+                        <option id="optConfigBase" value="base">
+                            基础版本（base.ini）
+                        </option>
+                        <option id="optConfigPro" value="pro">
+                            进阶版本（pro.ini）
+                        </option>
+                        <option id="optConfigCustom" value="custom">
+                            自定义 URL
+                        </option>
+                    </select>
+                    <input
+                        id="configUrl"
+                        type="url"
+                        placeholder="https://r2.oimi.space/Clash/base.ini"
+                        class="h-12 w-full rounded-xl border border-ink/20 bg-white px-3 leading-none text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+                    />
+                </label>
 
-        <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <label class="space-y-1">
-            <span id="labelFormat" class="text-sm text-ink/70">输出格式</span>
-            <select
-              id="format"
-              class="select-native h-12 w-full rounded-xl border border-ink/20 bg-white px-3 pr-12 leading-none text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+                <label id="urlsField" class="mt-3 block space-y-1">
+                    <span id="labelUrlsText" class="text-sm text-ink/70"
+                        >订阅 URL（每行一个）</span
+                    >
+                    <textarea
+                        id="urlsText"
+                        rows="5"
+                        placeholder="https://example.com/sub1&#10;https://example.com/sub2"
+                        class="w-full rounded-xl border border-ink/20 bg-white px-3 py-2 text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+                    ></textarea>
+                </label>
+
+                <label id="subField" class="mt-3 hidden block space-y-1">
+                    <span id="labelSubText" class="text-sm text-ink/70"
+                        >原始订阅内容</span
+                    >
+                    <textarea
+                        id="subText"
+                        rows="7"
+                        placeholder="可混写：http(s)订阅地址 + 节点链接 + base64"
+                        class="w-full rounded-xl border border-ink/20 bg-white px-3 py-2 text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+                    ></textarea>
+                </label>
+
+                <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <label class="space-y-1">
+                        <span id="labelFormat" class="text-sm text-ink/70"
+                            >输出格式</span
+                        >
+                        <select
+                            id="format"
+                            class="select-native h-12 w-full rounded-xl border border-ink/20 bg-white px-3 pr-12 leading-none text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+                        >
+                            <option id="optFormatProfile" value="profile">
+                                profile（完整配置）
+                            </option>
+                            <option id="optFormatProvider" value="provider">
+                                provider（仅 proxies）
+                            </option>
+                        </select>
+                    </label>
+
+                    <div class="flex items-end">
+                        <div
+                            class="w-full rounded-xl border border-ink/15 bg-paper px-3 py-2 text-xs text-ink/65"
+                        >
+                            <span id="policyHint"
+                                >profile
+                                模式自动附带固定分流策略（不可修改）</span
+                            >
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 gap-3">
+                    <div
+                        class="rounded-xl border border-ink/15 bg-paper/70 p-3"
+                    >
+                        <p
+                            id="groupYaml"
+                            class="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-ink/55"
+                        >
+                            YAML 功能
+                        </p>
+                        <div class="flex flex-wrap gap-2">
+                            <button
+                                id="convertBtn"
+                                class="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105"
+                            >
+                                <span id="btnConvertText">转换</span>
+                            </button>
+                            <button
+                                id="copyBtn"
+                                disabled
+                                class="rounded-xl border border-ink/25 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:border-ink/45 disabled:opacity-45"
+                            >
+                                <span id="btnCopyText">复制</span>
+                            </button>
+                            <button
+                                id="downloadBtn"
+                                disabled
+                                class="rounded-xl border border-ink/25 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:border-ink/45 disabled:opacity-45"
+                            >
+                                <span id="btnDownloadText">下载 YAML</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div
+                        class="rounded-xl border border-ink/15 bg-paper/70 p-3"
+                    >
+                        <p
+                            id="groupLink"
+                            class="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-ink/55"
+                        >
+                            订阅链接功能
+                        </p>
+                        <p
+                            id="linkWarning"
+                            class="mb-2 rounded-lg border border-amber-300/70 bg-amber-50 px-2.5 py-2 text-xs text-amber-700"
+                        >
+                            短链服务会存储节点信息
+                        </p>
+                        <div class="flex flex-wrap gap-2">
+                            <button
+                                id="genGetBtn"
+                                class="rounded-xl border border-ink/25 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:border-ink/45"
+                            >
+                                <span id="btnGenGetText"
+                                    >生成订阅链接并复制</span
+                                >
+                            </button>
+                            <button
+                                id="genShortBtn"
+                                class="rounded-xl border border-ink/25 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:border-ink/45"
+                            >
+                                <span id="btnGenShortText">生成短链并复制</span>
+                            </button>
+                        </div>
+
+                        <label class="mt-3 block space-y-1">
+                            <span
+                                id="labelGeneratedUrl"
+                                class="text-sm text-ink/70"
+                                >生成的 GET 请求地址</span
+                            >
+                            <input
+                                id="generatedUrl"
+                                type="text"
+                                readonly
+                                placeholder="点击“生成订阅链接并复制”后显示"
+                                class="h-12 w-full rounded-xl border border-ink/20 bg-white/70 px-3 leading-none text-ink/80 outline-none"
+                            />
+                        </label>
+                    </div>
+                </div>
+
+                <div
+                    id="status"
+                    class="mt-2 min-h-5 text-sm text-ink/70"
+                    role="status"
+                    aria-live="polite"
+                ></div>
+            </section>
+
+            <section
+                class="mt-4 rounded-2xl border border-ink/15 bg-white/80 p-4 shadow-[0_8px_28px_rgba(45,45,43,0.08)] backdrop-blur md:p-5"
             >
-              <option id="optFormatProfile" value="profile">profile（完整配置）</option>
-              <option id="optFormatProvider" value="provider">provider（仅 proxies）</option>
-            </select>
-          </label>
+                <div class="mb-2 flex items-center justify-between gap-3">
+                    <h2 class="text-base font-semibold">
+                        <span id="yamlPreviewTitle"
+                            >YAML 预览（Highlight.js）</span
+                        >
+                    </h2>
+                    <small id="metaInfo" class="text-ink/60"></small>
+                </div>
 
-          <div class="flex items-end">
-            <div class="w-full rounded-xl border border-ink/15 bg-paper px-3 py-2 text-xs text-ink/65">
-              <span id="policyHint">profile 模式自动附带固定分流策略（不可修改）</span>
-            </div>
-          </div>
-        </div>
+                <div
+                    class="yaml-preview overflow-hidden rounded-xl border border-ink/15 bg-[#F5F5F2]"
+                >
+                    <pre><code id="outputCode" class="language-yaml hljs"># 转换后的 Clash.Meta YAML 会显示在这里</code></pre>
+                </div>
+            </section>
+        </main>
 
-        <div class="mt-4 grid grid-cols-1 gap-3">
-          <div class="rounded-xl border border-ink/15 bg-paper/70 p-3">
-            <p id="groupYaml" class="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-ink/55">YAML 功能</p>
-            <div class="flex flex-wrap gap-2">
-              <button
-                id="convertBtn"
-                class="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105"
-              >
-                <span id="btnConvertText">转换</span>
-              </button>
-              <button
-                id="copyBtn"
-                disabled
-                class="rounded-xl border border-ink/25 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:border-ink/45 disabled:opacity-45"
-              >
-                <span id="btnCopyText">复制</span>
-              </button>
-              <button
-                id="downloadBtn"
-                disabled
-                class="rounded-xl border border-ink/25 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:border-ink/45 disabled:opacity-45"
-              >
-                <span id="btnDownloadText">下载 YAML</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="rounded-xl border border-ink/15 bg-paper/70 p-3">
-            <p id="groupLink" class="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-ink/55">订阅链接功能</p>
-            <div class="flex flex-wrap gap-2">
-              <button
-                id="genGetBtn"
-                class="rounded-xl border border-ink/25 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:border-ink/45"
-              >
-                <span id="btnGenGetText">生成订阅链接并复制</span>
-              </button>
-              <button
-                id="genShortBtn"
-                class="rounded-xl border border-ink/25 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:border-ink/45"
-              >
-                <span id="btnGenShortText">生成短链并复制</span>
-              </button>
-            </div>
-
-            <label class="mt-3 block space-y-1">
-              <span id="labelGeneratedUrl" class="text-sm text-ink/70">生成的 GET 请求地址</span>
-              <input
-                id="generatedUrl"
-                type="text"
-                readonly
-                placeholder="点击“生成订阅链接并复制”后显示"
-                class="h-12 w-full rounded-xl border border-ink/20 bg-white/70 px-3 leading-none text-ink/80 outline-none"
-              />
-            </label>
-          </div>
-        </div>
-
-        <div id="status" class="mt-2 min-h-5 text-sm text-ink/70" role="status" aria-live="polite"></div>
-      </section>
-
-      <section class="mt-4 rounded-2xl border border-ink/15 bg-white/80 p-4 shadow-[0_8px_28px_rgba(45,45,43,0.08)] backdrop-blur md:p-5">
-        <div class="mb-2 flex items-center justify-between gap-3">
-          <h2 class="text-base font-semibold"><span id="yamlPreviewTitle">YAML 预览（Highlight.js）</span></h2>
-          <small id="metaInfo" class="text-ink/60"></small>
-        </div>
-
-        <div class="yaml-preview overflow-hidden rounded-xl border border-ink/15 bg-[#F5F5F2]">
-          <pre><code id="outputCode" class="language-yaml hljs"># 转换后的 Clash.Meta YAML 会显示在这里</code></pre>
-        </div>
-      </section>
-    </main>
-
-    <script src="https://cdn.bootcdn.net/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/highlight.js/11.11.1/languages/yaml.min.js"></script>
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="./app.js?v=20260319-3"></script>
   </body>
 </html>

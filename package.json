@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "deploy-page": "wrangler pages deploy pages --project-name sub-convert-ui"
+    "build:css": "tailwindcss -c tailwind.config.js -i ./pages/tailwind.input.css -o ./pages/tailwind.css --minify",
+    "deploy-page": "npm run build:css && wrangler pages deploy pages --project-name sub-convert-ui"
   },
   "devDependencies": {
+    "tailwindcss": "^3.4.17",
     "wrangler": "^4.8.0"
   }
 }
